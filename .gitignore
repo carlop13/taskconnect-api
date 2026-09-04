@@ -1,0 +1,5 @@
+.env
+instalaciones.txt
+.env_example
+
+node_modules
