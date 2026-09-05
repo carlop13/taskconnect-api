@@ -3,17 +3,23 @@ import dotenv from 'dotenv';
 import app from '../app.js';
 dotenv.config();
 
-
-//DECLARAR VARIABLES DEL PUERTO Y LA BASE DE DATOS
 const PORT = process.env.PORT || 3000;
-const mongodbUri = process.env.MONGODB_URI || "nada";
+const mongodbUri = process.env.MONGODB_URI;
 
-//INICIAR EL SERVIDOR
-app.listen(PORT);
+// Evitar múltiples conexiones en entornos Serverless (Vercel)
+if (mongoose.connection.readyState !== 1) {
+    mongoose.connect(mongodbUri)
+        .then(() => console.log('Conectado a la base de datos Atlas.'))
+        .catch((error) => console.error('Error conectando a MongoDB:', error));
+}
 
-//CONECTAR A LA BASE DE DATOS DE MONGO ATLAS
-mongoose.connect(mongodbUri)
-    .then(() => console.log('Conectado a la base de datos Atlas.'))
-    .catch((error) => console.error(error));
+// Solo iniciar app.listen si NO estamos en Vercel
+// Vercel inyecta automáticamente una variable de entorno para saber que estamos ahí
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log('Servicio corriendo en el puerto: ', PORT);
+    });
+}
 
-console.log('Servicio correindo en el puerto: ',PORT);
+// Exportar la app es obligatorio para que Vercel la pueda ejecutar
+export default app;

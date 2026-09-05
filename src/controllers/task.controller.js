@@ -132,6 +132,3 @@ export const editTask = async (req, res) => {
         return res.status(500).json({ message: "Error al editar la tarea." });
     }
 };
-
-
-
