@@ -17,6 +17,9 @@ const projectSchema = new Schema({
         type: Schema.Types.ObjectId, 
         ref: 'User'
     },
+    pendingMembers: [{ 
+        type: String 
+    }],
 },
     {
         timestamps: true,
