@@ -14,8 +14,8 @@ const transporter = nodemailer.createTransport({
 });
 
 export const addMembersToProject = async (req, res) => {
-    const { id } = req.params; // Obtener el ID del proyecto desde los parámetros de la solicitud
-    const { members } = req.body; // Obtener la lista de nuevos miembros del cuerpo de la solicitud
+    const { id } = req.params; 
+    const { members } = req.body; 
 
     try {
         const project = await Project.findById(id);
@@ -43,18 +43,15 @@ export const addMembersToProject = async (req, res) => {
 };
 
 export const deleteProject = async (req, res) => {
-    const { id } = req.params; // Obtener el ID del proyecto desde los parámetros de la solicitud
+    const { id } = req.params; 
 
     try {
-        // Buscar y eliminar el proyecto
         const deletedProject = await Project.findByIdAndDelete(id);
 
-        // Verificar si el proyecto existía
         if (!deletedProject) {
             return res.status(404).json({ message: "Proyecto no encontrado." });
         }
 
-        // Devolver una respuesta exitosa
         return res.status(200).json({ message: "Proyecto eliminado con éxito." });
     } catch (error) {
         console.error(error);
@@ -66,12 +63,22 @@ export const getUserProjects = async (req, res) => {
     try {
         const userId = req.params.id; 
 
+        // Súper consulta: Extrae los proyectos y TODO su contenido anidado en una sola llamada
         const projects = await Project.find({ 
             $or: [
                 { members: userId }, 
                 { leader: userId }
             ]
-        }).select('name');
+        })
+        .populate('leader', 'name lastname email')
+        .populate('members', 'name lastname email')
+        .populate({
+            path: 'tasks',
+            populate: {
+                path: 'assignedTo',
+                select: 'name lastname email'
+            }
+        });
 
         if (projects.length === 0) {
             return res.status(200).json({ message: "No se encontraron proyectos para este usuario.", projects: [] });
@@ -88,32 +95,28 @@ export const createProject = async (req, res) => {
     try {
         const { name, description, members, leader } = req.body;
 
-        // 1. Validar al líder
         const leaderUser = await User.findOne({ email: leader });
         if (!leaderUser) {
             return res.status(400).json({ message: "El líder del proyecto no existe." });
         }
 
-        // 2. Separar usuarios registrados de los no registrados
         const existingUsers = await User.find({ email: { $in: members } });
         const existingEmails = existingUsers.map(user => user.email);
         const unregisteredEmails = members.filter(email => !existingEmails.includes(email));
         
         const memberIds = existingUsers.map(user => user._id);
 
-        // 3. Crear el proyecto guardando ambas listas
         const newProject = new Project({
             name,
             description,
-            members: memberIds,           // IDs de los que sí existen
-            pendingMembers: unregisteredEmails, // Correos de los que faltan
+            members: memberIds,           
+            pendingMembers: unregisteredEmails, 
             leader: leaderUser._id
         });
 
         const savedProject = await newProject.save();
         const leaderFullName = `${leaderUser.name} ${leaderUser.lastname}`;
 
-        // 4. Enviar correos a los YA REGISTRADOS
         for (const email of existingEmails) {
             await transporter.sendMail({
                 from: '"Taskconnect" <patiguerrero234@gmail.com>',
@@ -125,7 +128,6 @@ export const createProject = async (req, res) => {
             });
         }
 
-        // 5. Enviar correos de INVITACIÓN a los NO REGISTRADOS
         for (const email of unregisteredEmails) {
             await transporter.sendMail({
                 from: '"Taskconnect" <patiguerrero234@gmail.com>',
@@ -181,4 +183,3 @@ export const removeUserFromProject = async (req, res) => {
         return res.status(500).json({ message: "Error al eliminar al usuario del proyecto." });
     }
 };
-
