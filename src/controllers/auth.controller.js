@@ -41,6 +41,6 @@ function tokenGenerate(userFound) {
     return jwt.sign(
         { id: userFound._id, name: userFound.name, lastname: userFound.lastname },
         secret, 
-        { expiresIn: 86400 }
+        { expiresIn: '7d' }
     );
 }
