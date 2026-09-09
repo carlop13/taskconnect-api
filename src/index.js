@@ -30,7 +30,6 @@ async function connectDB() {
         
         // Configuramos la piscina de conexiones (Pool)
         const opts = {
-            serverSelectionTimeoutMS: 5000, // Si Mongo no responde en 5s, aborta en lugar de quedarse colgado
             maxPoolSize: 10 // Límite estricto para no asustar al plan gratuito de Atlas
         };
 
