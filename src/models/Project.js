@@ -1,30 +1,36 @@
-import { Schema, model } from 'mongoose';
+import mongoose from "mongoose";
 
-const projectSchema = new Schema({
-    name: {
-        type: String,
-        required: true
+const projectSchema = new mongoose.Schema(
+    {
+        name: {
+            type: String,
+            required: true,
+        },
+        description: {
+            type: String,
+            required: true,
+        },
+        leader: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            required: true,
+        },
+        members: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
+        }],
+        pendingMembers: [{
+            type: String 
+        }],
+        tasks: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Task'
+        }]
     },
-    description: {
-        type: String,
-        required: true
-    },
-    members: [{
-        type: Schema.Types.ObjectId, 
-        ref: 'User'
-    }],
-    leader: {
-        type: Schema.Types.ObjectId, 
-        ref: 'User'
-    },
-    pendingMembers: [{ 
-        type: String 
-    }],
-},
     {
         timestamps: true,
-        versionKey: false
+        versionKey: false,
     }
 );
 
-export default model('Project', projectSchema);
+export default mongoose.model("Project", projectSchema);
