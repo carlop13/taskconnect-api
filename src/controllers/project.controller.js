@@ -2,7 +2,6 @@ import Project from '../models/Project.js';
 import User from '../models/User.js';
 import nodemailer from 'nodemailer';
 
-// CONFIGURACIÓN DE BREVO (SMTP)
 const transporter = nodemailer.createTransport({
     host: 'smtp-relay.brevo.com',
     port: 587,
@@ -14,27 +13,20 @@ const transporter = nodemailer.createTransport({
 });
 
 export const addMembersToProject = async (req, res) => {
-    const { id } = req.params; 
-    const { members } = req.body; 
+    const { id } = req.params;
+    const { members } = req.body;
 
     try {
         const project = await Project.findById(id);
-
-        if (!project) {
-            return res.status(404).json({ message: "Proyecto no encontrado." });
-        }
+        if (!project) return res.status(404).json({ message: "Proyecto no encontrado." });
 
         const users = await User.find({ email: { $in: members } });
-
-        if (users.length === 0) {
-            return res.status(404).json({ message: "No se encontraron usuarios con los correos electrónicos proporcionados." });
-        }
+        if (users.length === 0) return res.status(404).json({ message: "No se encontraron usuarios." });
 
         const userIds = users.map(user => user._id);
         project.members = [...new Set([...project.members, ...userIds])];
 
         await project.save();
-
         return res.status(200).json({ message: "Miembros agregados al proyecto con éxito.", project });
     } catch (error) {
         console.error(error);
@@ -43,15 +35,10 @@ export const addMembersToProject = async (req, res) => {
 };
 
 export const deleteProject = async (req, res) => {
-    const { id } = req.params; 
-
+    const { id } = req.params;
     try {
         const deletedProject = await Project.findByIdAndDelete(id);
-
-        if (!deletedProject) {
-            return res.status(404).json({ message: "Proyecto no encontrado." });
-        }
-
+        if (!deletedProject) return res.status(404).json({ message: "Proyecto no encontrado." });
         return res.status(200).json({ message: "Proyecto eliminado con éxito." });
     } catch (error) {
         console.error(error);
@@ -59,25 +46,19 @@ export const deleteProject = async (req, res) => {
     }
 };
 
+// 👇 LA SUPER CONSULTA: Trae el proyecto, el líder, los miembros y LAS TAREAS de un solo golpe
 export const getUserProjects = async (req, res) => {
     try {
         const userId = req.params.id; 
 
-        // Súper consulta: Extrae los proyectos y TODO su contenido anidado en una sola llamada
         const projects = await Project.find({ 
-            $or: [
-                { members: userId }, 
-                { leader: userId }
-            ]
+            $or: [{ members: userId }, { leader: userId }]
         })
         .populate('leader', 'name lastname email')
         .populate('members', 'name lastname email')
         .populate({
             path: 'tasks',
-            populate: {
-                path: 'assignedTo',
-                select: 'name lastname email'
-            }
+            populate: { path: 'assignedTo', select: 'name lastname email' }
         });
 
         if (projects.length === 0) {
@@ -96,9 +77,7 @@ export const createProject = async (req, res) => {
         const { name, description, members, leader } = req.body;
 
         const leaderUser = await User.findOne({ email: leader });
-        if (!leaderUser) {
-            return res.status(400).json({ message: "El líder del proyecto no existe." });
-        }
+        if (!leaderUser) return res.status(400).json({ message: "El líder del proyecto no existe." });
 
         const existingUsers = await User.find({ email: { $in: members } });
         const existingEmails = existingUsers.map(user => user.email);
@@ -109,9 +88,10 @@ export const createProject = async (req, res) => {
         const newProject = new Project({
             name,
             description,
-            members: memberIds,           
-            pendingMembers: unregisteredEmails, 
-            leader: leaderUser._id
+            members: memberIds,
+            pendingMembers: unregisteredEmails,
+            leader: leaderUser._id,
+            tasks: [] // Inicializamos el arreglo de tareas vacío
         });
 
         const savedProject = await newProject.save();
@@ -149,26 +129,19 @@ export const createProject = async (req, res) => {
     }
 };
 
-
 export const removeUserFromProject = async (req, res) => {
     const { projectId, userId } = req.params;
-
     try {
         const project = await Project.findById(projectId);
+        if (!project) return res.status(404).json({ message: "Proyecto no encontrado." });
 
-        if (!project) {
-            return res.status(404).json({ message: "Proyecto no encontrado." });
-        }
-
-        if (project.leader === userId) {
+        if (project.leader.toString() === userId) {
             await Project.findByIdAndDelete(projectId);
             return res.status(200).json({ message: "Proyecto eliminado porque el líder fue eliminado." });
         }
 
         const memberIndex = project.members.indexOf(userId);
-        if (memberIndex > -1) {
-            project.members.splice(memberIndex, 1);
-        }
+        if (memberIndex > -1) project.members.splice(memberIndex, 1);
 
         if (project.members.length === 0) {
             await Project.findByIdAndDelete(projectId);
@@ -176,7 +149,6 @@ export const removeUserFromProject = async (req, res) => {
         }
 
         await project.save();
-
         return res.status(200).json({ message: "Usuario eliminado del proyecto con éxito." });
     } catch (error) {
         console.error(error);
