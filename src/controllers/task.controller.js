@@ -63,7 +63,10 @@ export const createTask = async (req, res) => {
 
         const assignedTo = users.map(user => user._id);
 
-        const validAssignedUsers = assignedTo.filter(userId => foundProject.members.includes(userId));
+        // Permite la asignación si el usuario es miembro oficial O si es el líder del proyecto
+        const validAssignedUsers = assignedTo.filter(userId => 
+            foundProject.members.includes(userId) || foundProject.leader.toString() === userId.toString()
+        );
 
         if (validAssignedUsers.length !== assignedTo.length) {
             return res.status(400).json({ message: "Algunos usuarios no son miembros del proyecto." });
@@ -79,12 +82,16 @@ export const createTask = async (req, res) => {
         const savedTask = await newTask.save();
         await Project.findByIdAndUpdate(project, { $push: { tasks: savedTask._id } });
 
-        // Identificar quién está creando la tarea usando el token de la sesión
         const creator = await User.findById(req.userId);
         const creatorName = creator ? `${creator.name} ${creator.lastname}` : 'Un compañero';
 
-        // Enviar correos a cada usuario asignado a esta nueva tarea
         for (const user of users) {
+            // Evita enviar el correo si el usuario se asignó la tarea a sí mismo
+            if (user._id.toString() === req.userId) continue;
+
+            // Condicional para omitir la etiqueta de descripción si viene vacía
+            const descriptionHtml = description ? `<p><strong>Descripción:</strong> ${description}</p>` : '';
+
             await transporter.sendMail({
                 from: '"Taskconnect" <patiguerrero234@gmail.com>',
                 to: user.email,
@@ -92,7 +99,7 @@ export const createTask = async (req, res) => {
                 html: `<p>Hola ${user.name},</p>
                        <p><strong>${creatorName}</strong> te asignó una tarea en el proyecto <strong>${foundProject.name}</strong>.</p>
                        <p><strong>Tarea:</strong> ${title}</p>
-                       <p><strong>Descripción:</strong> ${description}</p>
+                       ${descriptionHtml}
                        <br>
                        <p>Ingresa a Taskconnect para actualizar su estado a "In Progress" en cuanto comiences a trabajar en ella.</p>`
             });
@@ -126,9 +133,11 @@ export const editTask = async (req, res) => {
             }
 
             const assignedTo = users.map(user => user._id);
-
             const foundProject = await Project.findById(task.project);
-            const validAssignedUsers = assignedTo.filter(userId => foundProject.members.includes(userId));
+            
+            const validAssignedUsers = assignedTo.filter(userId => 
+                foundProject.members.includes(userId) || foundProject.leader.toString() === userId.toString()
+            );
 
             if (validAssignedUsers.length !== assignedTo.length) {
                 return res.status(400).json({ message: "Algunos usuarios no son miembros del proyecto." });
@@ -137,19 +146,36 @@ export const editTask = async (req, res) => {
             task.assignedTo = validAssignedUsers;
         }
 
-        if (title) {
-            task.title = title;
-        }
+        if (title) task.title = title;
+        if (description !== undefined) task.description = description;
 
-        if (description) {
-            task.description = description;
-        }
-
-        if (status) {
-            task.status = status;
-        }
+        // Detectar si la tarea está siendo marcada como 'Completed' justo en esta petición
+        const isNewlyCompleted = status === 'Completed' && task.status !== 'Completed';
+        
+        if (status) task.status = status;
 
         const updatedTask = await task.save();
+
+        // Enviar notificación al líder solo si la tarea acaba de ser completada
+        if (isNewlyCompleted) {
+            const foundProject = await Project.findById(task.project).populate('leader');
+            
+            // Si la persona que completó la tarea NO es el líder, le enviamos el correo al líder
+            if (foundProject.leader._id.toString() !== req.userId) {
+                const updater = await User.findById(req.userId);
+                const updaterName = updater ? `${updater.name} ${updater.lastname}` : 'Un integrante';
+
+                await transporter.sendMail({
+                    from: '"Taskconnect" <patiguerrero234@gmail.com>',
+                    to: foundProject.leader.email,
+                    subject: `Tarea completada: ${updatedTask.title}`,
+                    html: `<p>Hola ${foundProject.leader.name},</p>
+                           <p>Te informamos que <strong>${updaterName}</strong> ha marcado la tarea <strong>"${updatedTask.title}"</strong> como completada dentro de tu equipo <strong>${foundProject.name}</strong>.</p>
+                           <br>
+                           <p>Puedes ingresar a Taskconnect para verificar los detalles.</p>`
+                });
+            }
+        }
 
         return res.status(200).json({
             message: "Tarea actualizada con éxito.",
