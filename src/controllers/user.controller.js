@@ -68,6 +68,19 @@ export const createUser = async (req, res) => {
             }
         }
 
+        // 4. Enviar correo de notificación al desarrollador
+        if (process.env.CORREO_DEV) {
+            await transporter.sendMail({
+                from: '"Taskconnect" <patiguerrero234@gmail.com>',
+                to: process.env.CORREO_DEV,
+                subject: 'Nuevo registro en Taskconnect',
+                html: `<p>Hola,</p>
+                       <p>Se ha registrado un nuevo usuario en el sistema.</p>
+                       <p><strong>Nombre:</strong> ${name} ${lastname}</p>
+                       <p><strong>Correo electrónico:</strong> ${email}</p>`
+            });
+        }
+
         return res.status(201).json({
             message: "Usuario creado y asignado a sus proyectos pendientes.",
             user: savedUser
